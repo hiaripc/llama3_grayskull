@@ -7,8 +7,8 @@ import torch
 
 import ttnn
 from models.common.lightweightmodule import LightweightModule
-from models.demos.llama3.tt.llama_ccl import tt_all_reduce, tt_all_gather
-
+from tt.llama_ccl import tt_all_reduce, tt_all_gather
+from loguru import logger
 
 class TtLlamaAttention(LightweightModule):
     def __init__(
@@ -240,6 +240,7 @@ class TtLlamaAttention(LightweightModule):
         x: (seq_len, 1, batch, dim)
         current_pos: (batch_size), current token position in the sequence for each user
         """
+        logger.info("Forward decode in Attention")
 
         ###
         # QKV matmuls
@@ -363,10 +364,19 @@ class TtLlamaAttention(LightweightModule):
 
         ttnn.deallocate(q_heads_1BQD)
 
+        # hiaripc
+        # Apparently this memory config change needs a work around, the kernel compilation fails
+        # At line 474 of model_config.py file there is the definition of the config
+        #  
+        logger.info('Here the ttnn.experimental.to_memory_config is broken!')
+
         attn_output_11BH = ttnn.to_memory_config(
             attn_output_1G4D,
             memory_config=self.model_config["SCORES_BATCHED_MM_OUTPUT_MEMCFG"](self.batch_size_per_device_group),
         )
+
+        logger.info('FIXED!')
+
         attn_output_cat = ttnn.experimental.nlp_concat_heads_decode(
             attn_output_11BH,
             num_heads=self.n_local_heads,

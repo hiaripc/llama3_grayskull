@@ -6,10 +6,10 @@ import pytest
 from loguru import logger
 import os
 import ttnn
-from models.demos.llama3.tt.llama_attention import TtLlamaAttention
-from models.demos.llama3.tt.llama_rope import TtLlamaRotarySetup
-from models.demos.llama3.tt.model_config import TtModelArgs
-from models.demos.llama3.tt.llama_common import (
+from tt.llama_attention import TtLlamaAttention
+from tt.llama_rope import TtLlamaRotarySetup
+from tt.model_config import TtModelArgs
+from tt.llama_common import (
     precompute_freqs,
     PagedAttentionConfig,
 )
