@@ -36,11 +36,13 @@ class DistributedNorm(LightweightModule):
                 core_grid=ttnn.CoreGrid(y=1, x=1),
                 strategy=ttnn.ShardStrategy.WIDTH,
             )
-            self.ln_cfg = ttnn.WormholeComputeKernelConfig(
+            print("-> hiaripc: distributed_norm.py | changing every WomholeComputeKernelConfig in Grayskull...")
+
+            self.ln_cfg = ttnn.GrayskullComputeKernelConfig(
                 math_fidelity=ttnn.MathFidelity.HiFi2,
                 math_approx_mode=False,
-                fp32_dest_acc_en=False,
-                packer_l1_acc=False,
+                # fp32_dest_acc_en=False, not supp GS
+                # packer_l1_acc=False, not supp GS
             )
         self.TG = TG
 

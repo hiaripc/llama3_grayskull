@@ -18,52 +18,16 @@ from models.utility_functions import (
     comp_pcc,
     comp_allclose,
 )
-from models.utility_functions import skip_for_grayskull
+from scripts.mesh_device import create_mesh_device
 
 
 @torch.no_grad()
-@skip_for_grayskull("Requires wormhole_b0 to run")
-@pytest.mark.parametrize(
-    "mesh_device",
-    [
-        {"N150": (1, 1), "N300": (1, 2), "T3K": (1, 8), "TG": (8, 4)}.get(
-            os.environ.get("FAKE_DEVICE"), len(ttnn.get_device_ids())
-        )
-    ],
-    indirect=True,
-)
-@pytest.mark.parametrize(
-    "paged_attention",
-    (
-        True,
-        False,
-    ),
-    ids=(
-        "paged_attention",
-        "default_attention",
-    ),
-)
-@pytest.mark.parametrize(
-    "page_params",
-    [{"page_block_size": 32, "page_max_num_blocks": 1024}],
-)
-@pytest.mark.parametrize(
-    "batch_size",
-    (1,),
-)
-@pytest.mark.parametrize(
-    "max_seq_len",
-    (256,),  # For decode-only unit test, there's no need to run with large sequence lengths
-)
 def test_llama_attention_inference(
-    max_seq_len,
-    batch_size,
-    paged_attention,
-    page_params,
-    mesh_device,
-    use_program_cache,
-    reset_seeds,
-    ensure_gc,
+    max_seq_len=256,
+    batch_size=1,
+    paged_attention=False,
+    page_params={"page_block_size": 32, "page_max_num_blocks": 1024},
+    mesh_device=(1,1),
 ):
     dtype = ttnn.bfloat8_b
     pcc = 0.99
@@ -164,6 +128,7 @@ def test_llama_attention_inference(
         ),
     )
 
+    logger.info("Starting generation!")
     for i in range(generation_length):
         # 70B attention block typically sees tensors with mean 0 and std 0.03 - 0.05 in layer 1
         pt_attention_input = torch.randn(batch_size, seq_len, model_args.dim) * 0.05
@@ -186,6 +151,7 @@ def test_llama_attention_inference(
             mode="decode",
             page_table=page_table_tt,
         )
+
         # multi-device attention module returns replicated output
         tt_out = ttnn.to_torch(
             tt_out,
@@ -288,3 +254,11 @@ def test_llama_attention_inference(
     else:
         logger.warning("Llama Attention output Failed!")
         assert all_tests_pass, f"PCC value is lower than {pcc} for some of the outputs. Check Warnings!"
+
+
+os.environ["LLAMA_DIR"] = "/home/bach/wd/tt/nn/models/Llama-3.2-1B"
+mesh_config = (1,1)
+# device_params = {"trace_region_size": 23887872, "num_command_queues": 2}
+device_params = {"l1_small_size": 24576, "trace_region_size": 3855488}
+mesh_device, pci_ids = create_mesh_device(mesh_config, device_params)
+test_llama_attention_inference(mesh_device=mesh_device)

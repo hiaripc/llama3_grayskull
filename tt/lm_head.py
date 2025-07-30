@@ -94,12 +94,14 @@ class LMHead(LightweightModule):
                         cache_file_name=cache_file_name,
                     )
                 )
+        
+        print("-> hiaripc: lm_head.py 98 | changing every WomholeComputeKernelConfig in Grayskull...")
 
-        self.compute_kernel_config = ttnn.WormholeComputeKernelConfig(
+        self.compute_kernel_config = ttnn.GrayskullComputeKernelConfig(
             math_fidelity=ttnn.MathFidelity.HiFi2,
             math_approx_mode=False,
-            fp32_dest_acc_en=False,
-            packer_l1_acc=True,
+            # fp32_dest_acc_en=False,
+            # packer_l1_acc=True,
         )
         if args.is_galaxy:
             self.program_configs = [

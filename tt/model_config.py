@@ -239,35 +239,40 @@ class TtModelArgs:
             )
 
             # Compute kernels. FP32 acc does not appear to be needed for accuracy in model tests or demo runs.
-            self.compute_kernel_config_lofi = ttnn.WormholeComputeKernelConfig(
+            print("-> hiaripc: model_config.py 242 | changing every WomholeComputeKernelConfig in Grayskull...")
+            # ttnn.WormholeComputeKernelConfig -> ttnn.GrayskullComputeKernelConfig
+            # packer_l1_acc=True non è supportato, rimuovo
+            # fp32_dest_acc_en=False non è supportato, rimuovo
+    
+            self.compute_kernel_config_lofi = ttnn.GrayskullComputeKernelConfig(
                 math_fidelity=ttnn.MathFidelity.LoFi,
                 math_approx_mode=False,
-                fp32_dest_acc_en=False,
-                packer_l1_acc=True,
+                # fp32_dest_acc_en=False,
+                # packer_l1_acc=True,
             )
-            self.compute_kernel_config_hifi2 = ttnn.WormholeComputeKernelConfig(
+            self.compute_kernel_config_hifi2 = ttnn.GrayskullComputeKernelConfig(
                 math_fidelity=ttnn.MathFidelity.HiFi2,
                 math_approx_mode=True,
-                fp32_dest_acc_en=True,
-                packer_l1_acc=True,
+                # fp32_dest_acc_en=True,
+                # packer_l1_acc=True,
             )
-            self.compute_kernel_config_hifi2_fp16 = ttnn.WormholeComputeKernelConfig(
+            self.compute_kernel_config_hifi2_fp16 = ttnn.GrayskullComputeKernelConfig(
                 math_fidelity=ttnn.MathFidelity.HiFi2,
                 math_approx_mode=False,
-                fp32_dest_acc_en=False,
-                packer_l1_acc=True,
+                # fp32_dest_acc_en=False,
+                # packer_l1_acc=True,
             )
-            self.compute_kernel_config_hifi4 = ttnn.WormholeComputeKernelConfig(
+            self.compute_kernel_config_hifi4 = ttnn.GrayskullComputeKernelConfig(
                 math_fidelity=ttnn.MathFidelity.HiFi4,
                 math_approx_mode=False,
-                fp32_dest_acc_en=True,
-                packer_l1_acc=True,
+                # fp32_dest_acc_en=True,
+                # packer_l1_acc=True,
             )
-            self.compute_kernel_config_sdpa = ttnn.WormholeComputeKernelConfig(
+            self.compute_kernel_config_sdpa = ttnn.GrayskullComputeKernelConfig(
                 math_fidelity=ttnn.MathFidelity.HiFi4,
                 math_approx_mode=False,
-                fp32_dest_acc_en=True,
-                packer_l1_acc=False,
+                # fp32_dest_acc_en=True,
+                # packer_l1_acc=False,
             )
 
             self.model_config["COMPUTE_KERNEL_CONFIG_HIFI2"] = self.compute_kernel_config_hifi2
@@ -433,11 +438,11 @@ class TtModelArgs:
                 k_chunk_size=256,
             )
 
-            self.model_config["SDPA_DECODE_COMPUTE_PROGCFG"] = ttnn.WormholeComputeKernelConfig(
+            self.model_config["SDPA_DECODE_COMPUTE_PROGCFG"] = ttnn.GrayskullComputeKernelConfig(
                 math_fidelity=ttnn.MathFidelity.HiFi2,
                 math_approx_mode=False,
-                fp32_dest_acc_en=False,
-                packer_l1_acc=False,
+                # fp32_dest_acc_en=False,
+                # packer_l1_acc=False,
             )
 
             # Useful core grid based on batch size
@@ -478,12 +483,13 @@ class TtModelArgs:
                 ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
                 ttnn.BufferType.L1,
                 ttnn.ShardSpec(
-                    core_range_set_by_batch,
-                    [
+                    grid=core_range_set_by_batch,
+                    shard_shape=[
                         128,
-                        128,
+                        128
                     ],
-                    ttnn.ShardOrientation.ROW_MAJOR,
+                    shard_orientation=ttnn.ShardOrientation.ROW_MAJOR,
+                    halo=False # EDIT: Added, needed for constructor, value default
                 ),
             )
 
@@ -595,6 +601,7 @@ class TtModelArgs:
                         nearest_32(56),
                     ],
                     ttnn.ShardOrientation.ROW_MAJOR,
+                    halo=False # EDIT: Added, needed for constructor, value?
                 ),
             )
 
@@ -832,6 +839,7 @@ class TtModelArgs:
                         self.dim // self.num_devices,
                     ],
                     ttnn.ShardOrientation.ROW_MAJOR,
+                    halo=False # EDIT: Added, needed for constructor, value?
                 ),
             )
 
@@ -1055,7 +1063,10 @@ class TtModelArgs:
         dram_cores = 12
         padded_size = math.ceil(n / (self.tile_size * dram_cores)) * (self.tile_size * dram_cores)
         shard_spec = ttnn.ShardSpec(
-            self.dram_weight_grid, (k, padded_size // dram_cores), ttnn.ShardOrientation.ROW_MAJOR
+            self.dram_weight_grid, 
+            (k, padded_size // dram_cores), 
+            ttnn.ShardOrientation.ROW_MAJOR,
+            halo=False # EDIT: Added, needed for constructor, value?
         )
         return ttnn.MemoryConfig(ttnn.TensorMemoryLayout.WIDTH_SHARDED, ttnn.BufferType.DRAM, shard_spec)
 
