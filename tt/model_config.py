@@ -873,6 +873,7 @@ class TtModelArgs:
         Prepare inputs for decode mode.
         x: (batch, seq, dim)
         """
+
         dims = (None, None) if force_replicated else (None, -1)
         mesh_mapper = ttnn.ShardTensor2dMesh(self.mesh_device, dims=dims, mesh_shape=self.cluster_shape)
 

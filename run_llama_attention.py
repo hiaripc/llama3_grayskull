@@ -30,6 +30,7 @@ def test_llama_attention_inference(
     mesh_device=(1,1),
 ):
     dtype = ttnn.bfloat8_b
+    # dtype = ttnn.bfloat16
     pcc = 0.99
 
     mesh_device.enable_async(True)
@@ -46,6 +47,12 @@ def test_llama_attention_inference(
     }
 
     reference_model = Attention(args=model_args)
+    # print(partial_state_dict)
+
+    # partial_state_dict['wq.weight'] = torch.ones((partial_state_dict['wq.weight'].shape), dtype=torch.bfloat16)
+    # partial_state_dict['wk.weight'] = torch.ones((partial_state_dict['wk.weight'].shape), dtype=torch.bfloat16)
+    # partial_state_dict['wv.weight'] = torch.ones((partial_state_dict['wv.weight'].shape), dtype=torch.bfloat16)
+
     reference_model.load_state_dict(partial_state_dict)
 
     seq_len = 1
@@ -130,14 +137,21 @@ def test_llama_attention_inference(
 
     logger.info("Starting generation!")
     for i in range(generation_length):
+    # for i in range(1):
+
         # 70B attention block typically sees tensors with mean 0 and std 0.03 - 0.05 in layer 1
-        pt_attention_input = torch.randn(batch_size, seq_len, model_args.dim) * 0.05
+        # pt_attention_input = torch.randn(batch_size, seq_len, model_args.dim) * 0.05
+        pt_attention_input = torch.ones(batch_size, seq_len, model_args.dim) * 0.05
+
+        # torch.set_printoptions(threshold=float('inf'))
+        torch.set_printoptions(profile='default')
 
         tt_attention_input = pt_attention_input.clone()
 
         attention_input = model_args.prepare_residual_tensor_decode(
             tt_attention_input,
-            model_args.model_config["SHARDED_ATTN_INPUT_MEMCFG"],
+            #  model_args.model_config["SHARDED_ATTN_INPUT_MEMCFG"],
+            ttnn.DRAM_MEMORY_CONFIG,
             force_replicated=False if model_args.is_galaxy else True,
         )
 
@@ -151,18 +165,30 @@ def test_llama_attention_inference(
             mode="decode",
             page_table=page_table_tt,
         )
-
+        
         # multi-device attention module returns replicated output
         tt_out = ttnn.to_torch(
             tt_out,
             mesh_composer=ttnn.ConcatMesh2dToTensor(mesh_device, dims=(1, 3), mesh_shape=model_args.cluster_shape),
         )
-        tt_output_torch = tt_out[:, 0:1, : model_args.max_batch_size, : model_args.dim].view(-1, 1, model_args.dim)
 
         # In this test all users have the same position (if using batch > 1)
         freqs_cis_i = freqs_cis[current_pos[0], :].unsqueeze(0)
 
         reference_output = reference_model(pt_attention_input, current_pos[0], freqs_cis_i, mask=None)
+        
+        # print(f"Torch: {reference_output.shape}")
+        # print(reference_output)
+
+        # print(f"TTNN: {tt_out.shape}")
+        # print(tt_out)
+
+        tt_output_torch = tt_out[:, 0:1, : model_args.max_batch_size, : model_args.dim].view(-1, 1, model_args.dim)
+        # tt_output_torch = tt_out.view(1, 1, model_args.dim)
+        # tt_output_torch = tt_out.view(1, 32, 1, 64) # attn_output_11BH
+        # tt_output_torch = tt_out
+
+        # print(f"TTNN reshaped: {tt_output_torch.shape}")
 
         passing, pcc_message = comp_pcc(reference_output, tt_output_torch, pcc)
 
@@ -256,9 +282,10 @@ def test_llama_attention_inference(
         assert all_tests_pass, f"PCC value is lower than {pcc} for some of the outputs. Check Warnings!"
 
 
-os.environ["LLAMA_DIR"] = "/home/bach/wd/tt/nn/models/Llama-3.2-1B"
-mesh_config = (1,1)
-# device_params = {"trace_region_size": 23887872, "num_command_queues": 2}
-device_params = {"l1_small_size": 24576, "trace_region_size": 3855488}
-mesh_device, pci_ids = create_mesh_device(mesh_config, device_params)
-test_llama_attention_inference(mesh_device=mesh_device)
+if __name__ == "__main__":
+    os.environ["LLAMA_DIR"] = "/home/bach/wd/tt/nn/models/Llama-3.2-1B"
+    mesh_config = (1, 1)
+    # device_params = {"trace_region_size": 23887872, "num_command_queues": 2}
+    device_params = {"l1_small_size": 24576, "trace_region_size": 3855488}
+    mesh_device, pci_ids = create_mesh_device(mesh_config, device_params)
+    test_llama_attention_inference(mesh_device=mesh_device)
